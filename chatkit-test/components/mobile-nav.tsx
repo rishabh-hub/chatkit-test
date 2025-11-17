@@ -13,6 +13,7 @@ import { Button } from "./ui/button";
 import Link from "next/link";
 import { Separator } from "./ui/separator";
 import { navigationItems } from "@/lib/constants";
+import { motion } from "framer-motion";
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
@@ -31,8 +32,13 @@ export function MobileNav() {
           <SheetDescription> Select page</SheetDescription>
         </SheetHeader>
         <nav>
-          {navigationItems.map((item) => (
-            <div className="w-full text-xl">
+          {navigationItems.map((item, index) => (
+            <motion.div
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: index * 0.2 }}
+              className="w-full text-xl"
+            >
               <div className=" flex gap-1 ps-2 items-center group hover:underline hover:text-blue-300">
                 <SquareArrowOutUpRight className=" opacity-0 w-4 h-4 group-hover:opacity-100 transition-opacity duration-300 " />
                 <Link className="" href={`${item.href}`}>
@@ -40,7 +46,7 @@ export function MobileNav() {
                 </Link>
               </div>
               <Separator className=" my-3" />
-            </div>
+            </motion.div>
           ))}
         </nav>
       </SheetContent>

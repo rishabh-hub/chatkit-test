@@ -2,6 +2,8 @@ import { LucideOctagon } from "lucide-react";
 import { MobileNav } from "./mobile-nav";
 import Link from "next/link";
 import { DesktopNav } from "./desktop-nav";
+import { UserNav } from "./user-nav";
+import { ModeToggle } from "./mode-toggle";
 
 export function Navbar() {
   return (
@@ -9,10 +11,10 @@ export function Navbar() {
       <div className=" container flex h-16 items-center">
         <MobileNav />
 
-        <div className="flex">
+        <div className="flex mr-4">
           <Link
             href={"/"}
-            className=" flex items-center space-x-2 text-amber-300 font-bold"
+            className=" mr-6 flex items-center space-x-2 text-amber-300 font-bold"
           >
             Company Name
             <span className="hidden font-bold ml-2 sm:inline-block">
@@ -21,14 +23,14 @@ export function Navbar() {
           </Link>
         </div>
 
-        <div className="hidden sm:flex flex-1 items-center justify-between space-x-2 md:justify-end">
+        <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
           <DesktopNav />
 
           {/* Right side items */}
-          {/* <div className="flex items-center space-x-2">
-            <ThemeToggle />
+          <div className="flex items-center space-x-10">
             <UserNav />
-          </div> */}
+            <ModeToggle />
+          </div>
         </div>
       </div>
     </header>

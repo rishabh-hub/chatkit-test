@@ -12,7 +12,7 @@ import { Link2, SquareArrowOutUpRight } from "lucide-react";
 
 export function DesktopNav() {
   return (
-    <NavigationMenu>
+    <NavigationMenu className="hidden sm:flex">
       <NavigationMenuList className=" flex-wrap gap-4">
         {navigationItems.map((item) => (
           <NavigationMenuItem
