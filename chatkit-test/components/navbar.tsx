@@ -21,7 +21,7 @@ export function Navbar() {
           </Link>
         </div>
 
-        <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
+        <div className="hidden sm:flex flex-1 items-center justify-between space-x-2 md:justify-end">
           <DesktopNav />
 
           {/* Right side items */}
