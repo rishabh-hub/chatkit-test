@@ -14,7 +14,7 @@ export function Navbar() {
         <div className="flex mr-4">
           <Link
             href={"/"}
-            className=" mr-6 flex items-center space-x-2 text-amber-300 font-bold"
+            className=" mr-6 flex items-center space-x-2 text-amber-300  font-bold"
           >
             Company Name
             <span className="hidden font-bold ml-2 sm:inline-block">

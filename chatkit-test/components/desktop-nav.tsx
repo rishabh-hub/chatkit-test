@@ -16,7 +16,7 @@ export function DesktopNav() {
       <NavigationMenuList className=" flex-wrap gap-4">
         {navigationItems.map((item) => (
           <NavigationMenuItem
-            className=" group/item cursor-pointer flex items-center gap-1 hover:text-blue-300 hover:underline"
+            className=" group/item cursor-pointer flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-300 hover:underline"
             key={item.name}
           >
             <Link href={`${item.href}`}>{item.name}</Link>
