@@ -3,7 +3,6 @@ import { Dispatch, SetStateAction } from "react";
 
 export function MyChat({
   theme,
-  setTheme,
 }: {
   theme: string | undefined;
   setTheme: Dispatch<SetStateAction<string>>;
