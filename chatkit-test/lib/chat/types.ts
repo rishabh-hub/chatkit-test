@@ -1,6 +1,6 @@
 export interface ToolCall {
   id: string;
-  name: String;
+  name: string;
   arguments: Record<string, unknown>;
   result?: unknown;
   status: "pending" | "running" | "complete" | "error";
@@ -51,6 +51,8 @@ export interface Message {
     model?: string;
     tokens?: number;
     sources?: Source[];
+    latency?: number;
+    streamed?: boolean;
     [key: string]: any;
   };
 }
@@ -73,15 +75,16 @@ export interface ChatState {
   isStreaming: boolean;
   streamingMessageId: string | null;
   error: string | null;
+
   agentState: AgentState;
   currentToolCall: ToolCall | null;
 
   //Actions
-  sendMessage: (content: string) => Promise<void>;
   createThread: () => string; //threadId
-  cancelStream: () => void;
-  selectThread: (threadId: string) => void;
-  clearError: () => void;
   deleteThread: (threadId: string) => void;
+  selectThread: (threadId: string) => void;
+  sendMessage: (content: string) => Promise<void>;
+  cancelStream: () => void;
   retryMessage: (messageId: string) => Promise<void>;
+  clearError: () => void;
 }
