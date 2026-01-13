@@ -29,7 +29,47 @@ This app tests multiple AI agent implementations:
    - Session creation via `/api/create-session` → OpenAI ChatKit API
    - Config in `lib/config.ts` (workflow ID, starter prompts)
 
-2. **LangChain Agent** (`/langchain-agent`) - placeholder for custom agent
+2. **Custom Agentic Chat** (`/langchain-agent`)
+   - Custom frontend with Zustand state management
+   - SSE streaming for real-time agent responses
+   - Backend: Python + FastAPI (no framework, custom agent loop)
+   - See PLAN.md for full architecture
+
+### Custom Chat System Architecture
+
+```
+lib/chat/
+├── types.ts              # ToolCall, ThinkingStep, AgentState, Source, Message, Thread
+├── sse.ts                # SSE event parser (async generator)
+├── stores/
+│   └── chat-store.ts     # Zustand store with immer + persist + devtools
+└── hooks/
+    ├── index.ts          # Barrel export
+    ├── use-chat.ts       # Main hook combining store + SSE
+    └── use-sse.ts        # SSE connection and event handling
+
+app/
+├── api/chat/route.ts     # Mock SSE endpoint (simulates agent behavior)
+└── langchain-agent/
+    ├── page.tsx          # Chat page
+    └── components/       # UI components (in progress)
+```
+
+**Key Types:**
+- `AgentState`: "idle" | "thinking" | "calling_tool" | "streaming" | "error"
+- `ToolCall`: Tool invocations with status, args, result
+- `ThinkingStep`: Chain-of-thought visibility (observation, thought, action, reflection)
+- `Source`: Citations from tool calls
+
+**SSE Event Protocol:**
+```
+thinking → tool_call → tool_result → content (streaming) → sources → done
+```
+
+**State Management:**
+- Zustand with immer for immutable updates
+- Persist middleware for local storage (threads, messages)
+- DevTools middleware for debugging
 
 ### Authentication Flow
 

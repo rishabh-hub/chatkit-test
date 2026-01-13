@@ -41,25 +41,49 @@ This document outlines the frontend architecture for a custom agentic chatbot wi
                                     │ SSE Stream (agentic events)
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                       BACKEND (FastAPI - Future)                         │
+│            BACKEND (Python + FastAPI - Custom Agent, No Framework)       │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│   ┌──────────────┐     ┌──────────────┐     ┌──────────────┐            │
-│   │    Agent     │────▶│    Tool      │────▶│    LLM       │            │
-│   │  Orchestrator│     │   Executor   │     │ (Claude/GPT) │            │
-│   └──────────────┘     └──────────────┘     └──────────────┘            │
-│          │                    │                                          │
-│          ▼                    ▼                                          │
-│   ┌──────────────┐     ┌──────────────┐                                 │
-│   │   Memory /   │     │   External   │                                 │
-│   │   Context    │     │   APIs/DBs   │                                 │
-│   └──────────────┘     └──────────────┘                                 │
+│   ┌──────────────────────────────────────────────────────────────┐      │
+│   │                    Custom Agent Loop (Pure Python)            │      │
+│   │                                                               │      │
+│   │   ┌────────────┐                                             │      │
+│   │   │   Agent    │  No LangChain, LlamaIndex, or other         │      │
+│   │   │ Orchestrator│  frameworks. Hand-rolled agent loop        │      │
+│   │   │ (custom)   │  for full control and learning.             │      │
+│   │   └─────┬──────┘                                             │      │
+│   │         │                                                     │      │
+│   │         ▼                                                     │      │
+│   │   ┌────────────┐     ┌────────────┐     ┌────────────┐       │      │
+│   │   │   Tool     │     │  Message   │     │   LLM      │       │      │
+│   │   │  Registry  │     │  History   │     │  Client    │       │      │
+│   │   │ (dict)     │     │  (list)    │     │ (httpx)    │       │      │
+│   │   └────────────┘     └────────────┘     └────────────┘       │      │
+│   │                                                               │      │
+│   │   Key Components:                                             │      │
+│   │   - Tool decorator for registering functions                  │      │
+│   │   - JSON schema generator for tool definitions                │      │
+│   │   - Simple ReAct-style loop (Reason → Act → Observe)          │      │
+│   │   - SSE event emitter for streaming                          │      │
+│   │                                                               │      │
+│   └──────────────────────────────────────────────────────────────┘      │
 │                                                                          │
-│   Endpoints:                                                             │
+│   ┌────────────┐     ┌────────────┐                                     │
+│   │  External  │     │  Claude/   │                                     │
+│   │   APIs     │     │  GPT API   │                                     │
+│   └────────────┘     └────────────┘                                     │
+│                                                                          │
+│   Endpoints (FastAPI):                                                   │
 │   POST /chat          → StreamingResponse (SSE with agentic events)     │
 │   GET  /chat/history  → Message[] with tool calls & sources             │
 │   POST /chat/thread   → Create new thread                               │
 │   DELETE /chat/thread → Delete thread                                   │
+│                                                                          │
+│   Why No Framework:                                                      │
+│   - Full understanding of agent internals                               │
+│   - No abstraction leakage or magic                                     │
+│   - Easier debugging and customization                                  │
+│   - Learning-first approach                                             │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -72,13 +96,13 @@ The frontend expects these event types from the backend agent:
 
 ```typescript
 type SSEEventType =
-  | "thinking"      // Chain-of-thought reasoning step
-  | "tool_call"     // Agent invoking a tool
-  | "tool_result"   // Tool execution complete
-  | "content"       // Streaming text content
-  | "sources"       // Citations/references used
-  | "done"          // Stream complete
-  | "error";        // Error occurred
+  | "thinking" // Chain-of-thought reasoning step
+  | "tool_call" // Agent invoking a tool
+  | "tool_result" // Tool execution complete
+  | "content" // Streaming text content
+  | "sources" // Citations/references used
+  | "done" // Stream complete
+  | "error"; // Error occurred
 ```
 
 **Example SSE stream from agentic backend:**
@@ -199,7 +223,12 @@ export interface ThinkingStep {
 }
 
 /** Agent execution state for UI feedback */
-export type AgentState = "idle" | "thinking" | "calling_tool" | "streaming" | "error";
+export type AgentState =
+  | "idle"
+  | "thinking"
+  | "calling_tool"
+  | "streaming"
+  | "error";
 
 /** Source/citation from tool calls */
 export interface Source {
@@ -229,9 +258,9 @@ export interface Message {
   status: "pending" | "streaming" | "complete" | "error";
 
   // Agentic fields
-  toolCalls?: ToolCall[];      // Tools invoked by assistant
-  toolCallId?: string;         // For tool role responses
-  thinking?: ThinkingStep[];   // Visible reasoning steps
+  toolCalls?: ToolCall[]; // Tools invoked by assistant
+  toolCallId?: string; // For tool role responses
+  thinking?: ThinkingStep[]; // Visible reasoning steps
 
   metadata?: {
     model?: string;
@@ -288,6 +317,7 @@ npm install eventsource-parser  # For SSE parsing
 **Step 2: Create Type Definitions**
 
 File: `lib/chat/types.ts`
+
 - Add ToolCall, ThinkingStep, AgentState, Source interfaces
 - Update Message interface with agentic fields
 - Update ChatState with agent tracking
@@ -424,7 +454,9 @@ export function ToolCallCard({ toolCall }: { toolCall: ToolCall }) {
       </CardHeader>
       <CardContent>
         <pre>{JSON.stringify(toolCall.arguments, null, 2)}</pre>
-        {toolCall.result && <pre>{JSON.stringify(toolCall.result, null, 2)}</pre>}
+        {toolCall.result && (
+          <pre>{JSON.stringify(toolCall.result, null, 2)}</pre>
+        )}
       </CardContent>
     </Card>
   );
@@ -460,25 +492,76 @@ Shows what the agent is currently doing:
 export function AgentStateIndicator({ state }: { state: AgentState }) {
   const indicators = {
     idle: null,
-    thinking: <><Brain className="animate-pulse" /> Thinking...</>,
-    calling_tool: <><Wrench className="animate-spin" /> Calling tool...</>,
-    streaming: <><Loader2 className="animate-spin" /> Generating...</>,
-    error: <><AlertCircle className="text-red-500" /> Error</>,
+    thinking: (
+      <>
+        <Brain className="animate-pulse" /> Thinking...
+      </>
+    ),
+    calling_tool: (
+      <>
+        <Wrench className="animate-spin" /> Calling tool...
+      </>
+    ),
+    streaming: (
+      <>
+        <Loader2 className="animate-spin" /> Generating...
+      </>
+    ),
+    error: (
+      <>
+        <AlertCircle className="text-red-500" /> Error
+      </>
+    ),
   };
 
-  return indicators[state] && (
-    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-      {indicators[state]}
-    </div>
+  return (
+    indicators[state] && (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        {indicators[state]}
+      </div>
+    )
   );
 }
 ```
 
 ---
 
-### Phase 4: Mock Backend (Until FastAPI is Ready)
+### Phase 4: Backend Development (Custom Python Agent)
 
-**Step 9: Create Mock SSE Endpoint**
+**Frontend Mock Endpoint (Current - app/api/chat/route.ts)**
+
+The Next.js mock endpoint simulates the SSE protocol for frontend development.
+
+**Future: Custom Python Agent (No Framework)**
+
+```
+backend/
+├── main.py              # FastAPI app with SSE endpoints
+├── agent/
+│   ├── __init__.py
+│   ├── loop.py          # Custom ReAct agent loop
+│   ├── tools.py         # @tool decorator and registry
+│   └── schemas.py       # JSON schema generator for tools
+├── llm/
+│   ├── __init__.py
+│   └── client.py        # httpx client for Claude/GPT API
+├── tools/
+│   ├── __init__.py
+│   ├── web_search.py    # Example: web search tool
+│   ├── calculator.py    # Example: calculator tool
+│   └── ...              # Your custom tools
+└── requirements.txt     # fastapi, uvicorn, httpx, sse-starlette
+```
+
+**Key Implementation Details:**
+
+- No LangChain, LlamaIndex, CrewAI, or any agent framework
+- Direct API calls to Claude/GPT using httpx
+- Custom @tool decorator for function registration
+- Hand-written ReAct loop: Think → Act → Observe → Repeat
+- SSE streaming using sse-starlette or manual StreamingResponse
+
+**Step 9: Create Mock SSE Endpoint (Done)**
 
 File: `app/api/chat/route.ts`
 
@@ -490,29 +573,59 @@ export async function POST(request: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       // Simulate thinking
-      controller.enqueue(encoder.encode(
-        `data: ${JSON.stringify({ type: "thinking", data: { id: "t1", content: "Processing request...", type: "thought" } })}\n\n`
-      ));
+      controller.enqueue(
+        encoder.encode(
+          `data: ${JSON.stringify({
+            type: "thinking",
+            data: {
+              id: "t1",
+              content: "Processing request...",
+              type: "thought",
+            },
+          })}\n\n`
+        )
+      );
       await sleep(500);
 
       // Simulate tool call
-      controller.enqueue(encoder.encode(
-        `data: ${JSON.stringify({ type: "tool_call", data: { id: "tc1", name: "mock_tool", arguments: { query: message }, status: "running" } })}\n\n`
-      ));
+      controller.enqueue(
+        encoder.encode(
+          `data: ${JSON.stringify({
+            type: "tool_call",
+            data: {
+              id: "tc1",
+              name: "mock_tool",
+              arguments: { query: message },
+              status: "running",
+            },
+          })}\n\n`
+        )
+      );
       await sleep(800);
 
       // Simulate tool result
-      controller.enqueue(encoder.encode(
-        `data: ${JSON.stringify({ type: "tool_result", data: { id: "tc1", result: { answer: "Mock result" }, status: "success" } })}\n\n`
-      ));
+      controller.enqueue(
+        encoder.encode(
+          `data: ${JSON.stringify({
+            type: "tool_result",
+            data: {
+              id: "tc1",
+              result: { answer: "Mock result" },
+              status: "success",
+            },
+          })}\n\n`
+        )
+      );
       await sleep(300);
 
       // Stream content
       const response = `This is a mock agentic response to: "${message}"`;
       for (const word of response.split(" ")) {
-        controller.enqueue(encoder.encode(
-          `data: ${JSON.stringify({ type: "content", data: word + " " })}\n\n`
-        ));
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({ type: "content", data: word + " " })}\n\n`
+          )
+        );
         await sleep(50);
       }
 
@@ -525,7 +638,7 @@ export async function POST(request: Request) {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
+      Connection: "keep-alive",
     },
   });
 }
@@ -582,15 +695,15 @@ app/
 
 ## What's Different for Agentic vs Simple Chat
 
-| Feature | Simple Chat | Agentic Chat |
-|---------|-------------|--------------|
-| Message roles | user, assistant, system | + `tool` role |
-| Agent state | just isStreaming | idle, thinking, calling_tool, streaming, error |
-| Tool tracking | N/A | ToolCall[] with status, args, result |
-| Reasoning | Hidden | ThinkingStep[] visible to user |
-| Sources | N/A | Source[] with citations |
-| SSE events | just content | thinking, tool_call, tool_result, content, sources |
-| UI components | MessageBubble, Input | + ToolCallCard, ThinkingIndicator, SourceCard |
+| Feature       | Simple Chat             | Agentic Chat                                       |
+| ------------- | ----------------------- | -------------------------------------------------- |
+| Message roles | user, assistant, system | + `tool` role                                      |
+| Agent state   | just isStreaming        | idle, thinking, calling_tool, streaming, error     |
+| Tool tracking | N/A                     | ToolCall[] with status, args, result               |
+| Reasoning     | Hidden                  | ThinkingStep[] visible to user                     |
+| Sources       | N/A                     | Source[] with citations                            |
+| SSE events    | just content            | thinking, tool_call, tool_result, content, sources |
+| UI components | MessageBubble, Input    | + ToolCallCard, ThinkingIndicator, SourceCard      |
 
 ---
 

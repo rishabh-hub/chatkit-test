@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     async start(controller) {
       const send = (event: { type: string; data: unknown }) => {
         controller.enqueue(
-          encoder.encode(`data : ${JSON.stringify(event)}\n\n`)
+          encoder.encode(`data: ${JSON.stringify(event)}\n\n`)
         );
       };
 
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
           data: {
             id: toolCallId,
             result: { found: true, relevance: 0.92 },
-            status: "success",
+            status: "complete",
           },
         });
 
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
         });
 
         // 7. Done
-        controller.enqueue(encoder.encode("data : [DONE]\n\n"));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       } catch (error) {
         send({ type: "error", data: String(error) });
       } finally {
